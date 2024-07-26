@@ -41,8 +41,8 @@ func (b *Bot) GetMe() (*User, error) {
 	return &user, nil
 }
 
-func (b *Bot) GetUpdatesChan() <-chan []*Update {
-	ch := make(chan []*Update, 100)
+func (b *Bot) GetUpdatesChan() <-chan *Update {
+	ch := make(chan *Update, 100)
 
 	go func() {
 		for {
@@ -52,7 +52,10 @@ func (b *Bot) GetUpdatesChan() <-chan []*Update {
 				return
 			}
 
-			ch <- updates
+			for _, upd := range updates {
+				ch <- upd
+			}
+
 		}
 	}()
 
