@@ -3,21 +3,27 @@ package telebot
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
 type Bot struct {
-	Token string
-
-	Client *http.Client
+	Token  string
+	client *http.Client
+	Me     *User
 }
 
-func New(token string) *Bot {
-	return &Bot{
+func New(token string) (*Bot, error) {
+	b := &Bot{
 		Token:  token,
-		Client: &http.Client{},
+		client: &http.Client{},
 	}
+	me, err := b.GetMe()
+	if err != nil {
+		return nil, err
+	}
+	b.Me = me
+	return b, nil
 }
 
 func (b *Bot) GetMe() (*User, error) {
@@ -35,25 +41,56 @@ func (b *Bot) GetMe() (*User, error) {
 	return &user, nil
 }
 
-func (b *Bot) makeRequest(method string) (*APIResponse, error) {
-	endpoint = fmt.Sprintf(endpoint, b.Token, method)
-	req, err := http.NewRequest("POST", endpoint, nil)
+func (b *Bot) GetUpdatesChan() <-chan []*Update {
+	ch := make(chan []*Update, 100)
+
+	go func() {
+		for {
+			updates, err := b.GetUpdates()
+			if err != nil {
+				close(ch)
+				return
+			}
+
+			ch <- updates
+		}
+	}()
+
+	return ch
+}
+
+func (b *Bot) GetUpdates() ([]*Update, error) {
+	apiResp, err := b.makeRequest("getUpdates")
 	if err != nil {
 		return nil, err
 	}
-	// TODO should I close req.Body?
+
+	var updates []*Update
+	if err := json.Unmarshal(apiResp.Result, &updates); err != nil {
+		return nil, err
+	}
+
+	return updates, err
+}
+
+func (b *Bot) makeRequest(method string) (*APIResponse, error) {
+	endpoint = fmt.Sprintf(endpoint, b.Token, method)
+	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
 	defer req.Body.Close()
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := b.Client.Do(req)
+	resp, err := b.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var apiResp APIResponse
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
