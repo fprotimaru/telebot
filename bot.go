@@ -82,7 +82,9 @@ func (b *Bot) makeRequest(method string) (*APIResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer req.Body.Close()
+	if req.Body != nil {
+		defer req.Body.Close()
+	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
